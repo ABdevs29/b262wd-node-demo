@@ -1,93 +1,14 @@
 import express from "express";
+import {updateUserById, deleteUserById, getUserById, createUser, getUsers, genPassword, managerSignup, getManagers} from "./helper.js"
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
+import bcrypt from "bcrypt";
 const app = express();
 
 dotenv.config();
 
 const PORT = process.env.PORT;
-// const users = [
-//   {
-//     createdAt: "2021-10-01T00:49:47.780Z",
-//     name: "Bennie Aufderhar",
-//     avatar: "https://cdn.fakercloud.com/avatars/d_kobelyatsky_128.jpg",
-//     ageGt: 59,
-//     color: "silver",
-//     id: "5",
-//   },
-//   {
-//     createdAt: "2021-09-30T14:22:51.638Z",
-//     name: "Lana Witting",
-//     avatar: "https://cdn.fakercloud.com/avatars/afusinatto_128.jpg",
-//     ageGt: 77,
-//     color: "olive",
-//     id: "6",
-//   },
-//   {
-//     createdAt: "2021-09-30T18:01:06.642Z",
-//     name: "Vickie Brekke",
-//     avatar: "https://cdn.fakercloud.com/avatars/carlyson_128.jpg",
-//     ageGt: 80,
-//     color: "tan",
-//     id: "7",
-//   },
-//   {
-//     createdAt: "2021-09-30T09:39:22.586Z",
-//     name: "Al Runolfsdottir",
-//     avatar: "https://cdn.fakercloud.com/avatars/areus_128.jpg",
-//     ageGt: 28,
-//     color: "orange",
-//     id: "8",
-//   },
-//   {
-//     createdAt: "2021-09-30T18:22:41.955Z",
-//     name: "Sam Orn",
-//     avatar: "https://cdn.fakercloud.com/avatars/itolmach_128.jpg",
-//     ageGt: 49,
-//     color: "indigo",
-//     id: "9",
-//   },
-//   {
-//     createdAt: "2021-09-30T18:30:05.224Z",
-//     name: "Grace Grimes",
-//     avatar: "https://cdn.fakercloud.com/avatars/smalonso_128.jpg",
-//     ageGt: 72,
-//     color: "yellow",
-//     id: "10",
-//   },
-//   {
-//     createdAt: "2021-09-30T11:26:57.667Z",
-//     name: "Cindy Reinger",
-//     avatar: "https://cdn.fakercloud.com/avatars/vimarethomas_128.jpg",
-//     ageGt: 30,
-//     color: "yellow",
-//     id: "11",
-//   },
-//   {
-//     createdAt: "2021-10-01T06:26:55.203Z",
-//     name: "Beth Koelpin",
-//     avatar: "https://cdn.fakercloud.com/avatars/anatolinicolae_128.jpg",
-//     ageGt: 0,
-//     color: "purple",
-//     id: "12",
-//   },
-//   {
-//     createdAt: "2021-09-30T12:28:17.426Z",
-//     name: "Doug Mayer",
-//     avatar: "https://cdn.fakercloud.com/avatars/nerrsoft_128.jpg",
-//     ageGt: 25,
-//     color: "cyan",
-//     id: "13",
-//   },
-//   {
-//     createdAt: "2021-10-01T01:09:41.654Z",
-//     name: "Mrs. Garrett Becker",
-//     avatar: "https://cdn.fakercloud.com/avatars/increase_128.jpg",
-//     ageGt: 20,
-//     color: "yellow",
-//     id: "14",
-//   },
-// ];
+
 
 //Tell express what format of data we are going to get json, xml, text
 //Middlewares is like a gatekeeper who converts to a unified format
@@ -96,23 +17,21 @@ app.use(express.json()); //In-built middleware in express
 
 //We can write custom own middlewares or use any other third party middlewares
 
-
-
 async function createConnection() {
-    //local MongoDB url
-//   const MONGO_URL = "mongodb://localhost/users";
+  //local MongoDB url
+  //   const MONGO_URL = "mongodb://localhost/users";
 
-//MongoDB Atlas URL
+  //MongoDB Atlas URL
   const client = new MongoClient(process.env.MONGO_URL);
 
   await client.connect();
   console.log("Successfully connected");
 
   //Inserted new data in MongoDB Atlas
-//   client
-//     .db("users")
-//     .collection("people")
-//     .insertMany(users);
+  //   client
+  //     .db("users")
+  //     .collection("people")
+  //     .insertMany(users);
 
   return client;
 }
@@ -124,6 +43,31 @@ app.get("/", (request, response) => {
   response.send("Hello All Guvians!!!");
 });
 
+
+
+//Signup page
+app.post("/manager/signup", async (request, response) => {
+  const client = await createConnection();
+  const { username, password } = request.body;
+  const hashedPassword = await genPassword(password);
+
+  const managers = await managerSignup(client, username, hashedPassword);
+
+  console.log(managers);
+  response.send(managers);
+});
+
+
+//Get all managers
+app.get("/managers", async (request, response) => {
+  const client = await createConnection();
+
+  const managers = await getManagers(client);
+
+  console.log(managers);
+  response.send(managers);
+});
+
 //Get all users or through query
 app.get("/users", async (request, response) => {
   const { color, ageGt } = request.query;
@@ -131,15 +75,12 @@ app.get("/users", async (request, response) => {
 
   const query = {};
   if (color) {
-      query.color = color;
+    query.color = color;
   }
   if (ageGt) {
-      query.age = {$gte: +ageGt};
+    query.age = { $gte: +ageGt };
   }
-  const users = await client
-  .db("users")
-  .collection("people")
-  .find(query).toArray();
+  const users = await getUsers(client, query);
 
   console.log(users);
   response.send(users);
@@ -147,54 +88,43 @@ app.get("/users", async (request, response) => {
 
 //Create User
 app.post("/users", async (request, response) => {
-    const client = await createConnection();
-    const addUsers = request.body;
-  
-    const result = await client
-  .db("users")
-  .collection("people")
-  .insertMany(addUsers);
+  const client = await createConnection();
+  const addUsers = request.body;
+
+  const result = await createUser(client, addUsers);
 
   console.log(result);
-    response.send(result);
-  });
+  response.send(result);
+});
 
-  //Get user by ID
+//Get user by ID
 app.get("/users/:id", async (request, response) => {
   const client = await createConnection();
   const id = request.params.id;
-  const user = await client
-    .db("users")
-    .collection("people")
-    .findOne({ id: id });
+  const user = await getUserById(client, id);
   response.send(user);
 });
 
 //Delete user by ID
 app.delete("/users/:id", async (request, response) => {
-    const client = await createConnection();
-    const id = request.params.id;
-    const user = await client
-      .db("users")
-      .collection("people")
-    //   .findOne({ id: id })
-      .deleteOne({ id: id });
-    response.send(user);
-  });
+  const client = await createConnection();
+  const id = request.params.id;
+  const user = await deleteUserById(client, id);
+  response.send(user);
+});
 
-  //Update user details
-  app.patch("/users/:id", async (request, response) => {
-    const client = await createConnection();
-    const id = request.params.id;
-    const newData = request.body;
-    const user = await client
-      .db("users")
-      .collection("people")
-      .updateOne({ id: id }, {$set: newData});
-    response.send(user);
-  });
+//Update user details
+app.patch("/users/:id", async (request, response) => {
+  const client = await createConnection();
+  const id = request.params.id;
+  const newData = request.body;
+  const user = await updateUserById(client, id, newData);
+  response.send(user);
+});
 
 app.listen(PORT, () => console.log("The server has started in: ", PORT));
+
+
 
 
 // app.get("/users", (request, response) => {
